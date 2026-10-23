@@ -1,4 +1,4 @@
-function D = fourierDiffOps(Nx, Ny)
+function D = fourierDiffOps(Nx, Ny, Lbox)
 %FOURIERDIFFOPS Spectral differentiation/lift/restrict operators for an
 %   Nx x Ny periodic fine grid paired with its (Nx-2) x (Ny-2) coarse grid.
 %
@@ -36,13 +36,23 @@ function D = fourierDiffOps(Nx, Ny)
 %   pass the resulting D down to every solver that needs it, rather than
 %   having each solver call this itself every timestep.
 
-[~, Dx1] = fourierGrid(1, Nx);
-[~, Dy1] = fourierGrid(1, Ny);
+%   Lbox (optional, default 1): side length of the periodic box. The grid
+%   is fourierGrid(Lbox/2,N), i.e. [-Lbox/2, Lbox/2) -- with Lbox = 1 this
+%   is the unit box of the paper (shifted by 1/2, which is irrelevant for a
+%   periodic domain). Only the derivative eigenvalues depend on Lbox (they
+%   scale with 1/Lbox, 1/Lbox^2); the lift/truncate operators below use
+%   only shift/L = 1/Nf - 1/Nc and are independent of the box size, so
+%   their internal "Ax = 1" is just a normalization.
+if nargin < 3 || isempty(Lbox), Lbox = 1; end
+Ax = Lbox/2;
+
+[~, Dx1] = fourierGrid(Ax, Nx);
+[~, Dy1] = fourierGrid(Ax, Ny);
 lambda_x = fft(Dx1(:,1));
 lambda_y = fft(Dy1(:,1));
 [KXgrid, KYgrid] = meshgrid(lambda_x, lambda_y);   % Ny x Nx
-[~, D2x1] = fourierGrid2(1, Nx);
-[~, D2y1] = fourierGrid2(1, Ny);
+[~, D2x1] = fourierGrid2(Ax, Nx);
+[~, D2y1] = fourierGrid2(Ax, Ny);
 lambda2_x = fft(D2x1(:,1));
 lambda2_y = fft(D2y1(:,1));
 [KX2grid, KY2grid] = meshgrid(lambda2_x, lambda2_y);
@@ -52,6 +62,7 @@ D.KY  = KYgrid;
 D.KX2 = KX2grid;
 D.KY2 = KY2grid;
 D.Nx  = Nx;
+D.Lbox = Lbox;
 D.Ny  = Ny;
 
 Nfine = Nx*Ny;

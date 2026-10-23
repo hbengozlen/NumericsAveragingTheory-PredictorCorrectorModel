@@ -1,8 +1,9 @@
 function [Uf1, Uf2, Up1, Up2, P] = solveVelocityFFT(phi, theta, parameter, D, x0)
-% Fluid + particle momentum and mixture continuity of the present model
-% (Averaging Theory notes, eqs. (46)-(48), reduced as in Section 4.1),
-% written with the model's own coefficients kappa1, F0, S0, Pc, eta2
-% instead of Wolgemuth's A, R, b, V0, Db, etab (see modelToGridUnits.m).
+% Fluid + particle momentum and mixture continuity, eqs. (21a)-(21c) of
+% the paper (unit box, Section 2.3), written with the model coefficients
+% kappa1hat, F, S, Pc, eta2 from mainModel.m (closure kappa1 = kappa1hat*phi
+% evaluated here). Flow alignment and the elastic back-reaction are not
+% included yet.
 % Same discretization, signs and stability fixes (velocity gauge pin,
 % Nyquist dealiasing, row scaling) as PredictorCorrector/solveVelocityFFT.m.
 %
@@ -45,11 +46,8 @@ function [Uf1, Uf2, Up1, Up2, P] = solveVelocityFFT(phi, theta, parameter, D, x0
 % physical vector directly, so x0 is passed through unchanged. Omit or
 % pass [] to start from zero (MATLAB's gmres default).
 %
-% Model coefficients, already in grid units (modelToGridUnits.m, called
-% once in mainModel.m) -- Averaging Theory notes, eqs. (47)-(48) with
-% nu1=nu2=kappa2=lambda=Lambda=0 and only eta2 nonzero (Section 4.1).
-kappa1_0   = parameter.kappa1_0;   % drag at phi0, kappa1 = kappa1_0*phi/phi0
-phi0       = parameter.phi0;
+% Model coefficients as set in mainModel.m (paper units, Table 1).
+kappa1hat  = parameter.kappa1hat;  % drag closure kappa1 = kappa1hat*phi (Table 1)
 F0         = parameter.F0;         % active force  F0*phi*d
 S0         = parameter.S0;         % active stress S0*div(phi*d d)  (S0<0 pushers)
 Pc         = parameter.Pc;         % contact pressure grad(phi*Pc)
@@ -90,7 +88,7 @@ phibar = mean(phi);              % frozen value used only by the preconditioner
 d1 = cos(theta);
 d2 = sin(theta);
 
-kappa1 = kappa1_0/phi0 * phiext;   % drag linear in phi (notes, Section 3.1)
+kappa1 = kappa1hat * phiext;      % drag closure, evaluated on the local phi
 
 %% Row-scaling estimate (same role as in solveVelocity.m)
 Mscale = max(abs(kappa1));

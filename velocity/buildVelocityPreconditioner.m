@@ -17,9 +17,11 @@ function [Minv, M] = buildVelocityPreconditioner(phibar, parameter, D)
 %   plain inv() (not pinv) is safe throughout:
 %
 %   1) At the true DC mode (kx=ky=0), rows 1,2 (fluid momentum) are
-%      replaced by a literal identity -- the exact Fourier-space
-%      representation of solveVelocityFFT.m's Av mean(Uf1)=0/mean(Uf2)=0
-%      gauge pin (fft2(x)(1,1)=sum(x)), not an approximation.
+%      replaced by the frozen-phibar form of velocityAv.m's gauge pin,
+%      zero mean mixture flux: (1-phibar)*Uf_DC + phibar*Up_DC = 0 in x
+%      and y (fft2(x)(1,1)=sum(x)). Exact for uniform phi, an
+%      approximation otherwise (GMRES corrects for it). Together with the
+%      DC drag rows 3,4 this block has determinant -kappa ~= 0.
 %
 %   2) Row/col 5 (pressure) is decoupled (set to a trivial identity)
 %      wherever pressure has no genuine degree of freedom there. Two
@@ -49,7 +51,7 @@ Nx = parameter.Nx; Ny = parameter.Ny;
 eta2 = parameter.eta2;   % particle shear viscosity / mu_f
 
 KX = D.KX; KY = D.KY; KX2 = D.KX2; KY2 = D.KY2;
-kappaPhibar = parameter.kappa1_0/parameter.phi0*phibar;   % drag at the mean phi
+kappaPhibar = parameter.kappa1hat*phibar;   % drag closure at the mean phi
 
 M = zeros(5,5,Ny,Nx);
 M(1,1,:,:) = -kappaPhibar + 2*KX2+KY2;   M(1,2,:,:) = KX.*KY;
@@ -64,9 +66,9 @@ M(4,4,:,:) = -kappaPhibar + eta2*(KX2+2*KY2); M(4,5,:,:) = -phibar*KY;
 M(5,1,:,:) = (1-phibar)*KX;  M(5,2,:,:) = (1-phibar)*KY;
 M(5,3,:,:) = phibar*KX;      M(5,4,:,:) = phibar*KY;
 
-% Decoupling (1): exact DC-mode velocity gauge pin.
-M(1,:,1,1) = 0; M(1,1,1,1) = 1;
-M(2,:,1,1) = 0; M(2,2,1,1) = 1;
+% Decoupling (1): DC-mode velocity gauge pin, zero mean mixture flux.
+M(1,:,1,1) = 0; M(1,1,1,1) = 1-phibar; M(1,3,1,1) = phibar;
+M(2,:,1,1) = 0; M(2,2,1,1) = 1-phibar; M(2,4,1,1) = phibar;
 
 % --- Option A (currently INACTIVE, commented out): decouple pressure at
 % EXACTLY the 4 corner modes where kx,ky in {0,Nyquist} simultaneously --

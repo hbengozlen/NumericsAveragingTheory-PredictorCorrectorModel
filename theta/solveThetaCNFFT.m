@@ -18,31 +18,34 @@ function theta_new = solveThetaCNFFT(theta_old, phi, Uf1, Uf2, Up1, Up2, dt_step
 
 Nx = parameter.Nx; Ny = parameter.Ny;
 Nfine = Nx*Ny;
-% Angular momentum (49) with beta=Lambda=nu2=0 gives
-%   Omega3 = OmegaHat3_p + (1/gamma1) div(K grad theta),
-% inserted into the director equation (50). K = K0*phi/phi0 (linear in
-% phi), gamma1 constant -- this reproduces the previous Wolgemuth-based
-% operator exactly, now written with the model's K0, gamma1 (grid units,
-% modelToGridUnits.m).
-coeff = parameter.K0 / (parameter.gamma1 * parameter.phi0);   % div(K grad)/gamma1 = coeff*div(phi grad)
-
+% Angular momentum balance (21d) with beta = nu2 = 0 gives
+%   Omega3 = OmegaHat3_p + (1/gamma1) div(K grad theta)
+% (+ Lambda*A_de, not yet included), inserted into the director equation
+% (21e). The closures of Table 1 are evaluated here on the local phi:
+%   K = Khat*phi^2,  gamma1 = gamma1hat*phi,
+% and the elastic operator is applied in product-rule form
+%   (1/gamma1) div(K grad v) = Kg.*lap(v) + gKx.*dv/dx + gKy.*dv/dy,
+%   Kg = K/gamma1,  (gKx,gKy) = grad(K)/gamma1.
 phiext = D.liftP(phi);
-DXphiext = D.DXf(phiext);
-DYphiext = D.DYf(phiext);
+K      = parameter.Khat * phiext.^2;
+gamma1 = parameter.gamma1hat * phiext;
+Kg  = K ./ gamma1;
+gKx = D.DXf(K) ./ gamma1;
+gKy = D.DYf(K) ./ gamma1;
 
 %% Frozen-mean preconditioner: same reasoning as solveThetaFFT.m's, just
 % with the (I/dt - 0.5*L_theta) form Crank-Nicolson puts on the implicit
 % operator instead of BE's (I/dt + D_adv - coeff*D_diff).
-phibar = mean(phiext);
+Kgbar = mean(Kg);
 a = mean(Up1); b = mean(Up2);
-invDenomCN = 1 ./ (1/dt_step - 0.5*(coeff*phibar*(D.KX2 + D.KY2) - a*D.KX - b*D.KY));
+invDenomCN = 1 ./ (1/dt_step - 0.5*(Kgbar*(D.KX2 + D.KY2) - a*D.KX - b*D.KY));
 
-ctx = struct('D', D, 'Up1', Up1, 'Up2', Up2, 'phiext', phiext, ...
-    'DXphiext', DXphiext, 'DYphiext', DYphiext, 'coeff', coeff, ...
+ctx = struct('D', D, 'Up1', Up1, 'Up2', Up2, 'Kg', Kg, ...
+    'gKx', gKx, 'gKy', gKy, ...
     'dt_step', dt_step, 'Nx', Nx, 'Ny', Ny, 'invDenomCN', invDenomCN);
 
 rhs = computeThetaCNRHS(theta_old, Up1, Up2, dt_step, ...
-    phiext, DXphiext, DYphiext, coeff, D);
+    Kg, gKx, gKy, D);
 
 y0 = real(ifft2(fft2(reshape(theta_old, Ny, Nx)) ./ invDenomCN));
 y0 = y0(:);

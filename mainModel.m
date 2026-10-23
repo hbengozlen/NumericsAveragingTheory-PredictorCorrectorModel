@@ -2,36 +2,52 @@ clear all
 clc
 addpath('velocity', 'phi', 'theta', 'common')   % per-solver-family subdirectories
 %% Predictor-corrector solver for the present two-phase model
-% Dimensionless equations of the Averaging Theory notes, Section 2.3
-% (eqs. 46-50), reduced as in Section 4.1: nu1 = nu2 = kappa2 = beta =
-% Lambda = lambda = 0, eta_{1,3,4,5} = 0, so only the parameters below
-% enter. Units: box side L, speed V0, time L/V0, pressure mu_f*V0/L.
-% Constitutive closures: drag kappa1 = kappa1_0*phi/phi0, Frank constant
-% K = K0*phi/phi0, all other coefficients constant.
+% Dimensionless equations (21) of "Linear stability of a two-phase model
+% for moderately dense active suspensions" (Ben Gozlen, Wang, Oberlack).
+% Units (Section 2.3): box side L, speed V0, time L/V0, pressure mu_f*V0/L.
 %
-% The solvers work on the [-1,1)^2 spectral grid (box length 2), so the
-% model parameters are converted once by modelToGridUnits.m; all times
-% below (T, dt, tt_model) are in model units L/V0.
+% The code works directly in these units: the spectral grid is the unit
+% periodic box (fourierDiffOps(Nx,Ny,1)), so all parameters, times (T, dt,
+% tt), velocities and the pressure are exactly those of the paper. Grid
+% coordinates parameter.x, parameter.y run over (0,1].
 
-%% Model parameters (dimensionless, notes Section 2.3)
-% Default: Wolgemuth's Fig. 2 case mapped onto the model (notes Section
-% 4.3, L = 400 um, V0 = 5 um/s => time unit L/V0 = 80 s). Reproduce with
-% wolgemuthToModel.m, or set your own values directly here.
-model.phi0     = 0.15;       % reference volume fraction phi_0
-model.kappa1_0 = 9.796e4;    % drag at phi0            kappa1_0 = kappa1*L^2/mu_f      (45b, 81a)
-model.F0       = 6.531e5;    % active force            F0 = F0*L^2/(mu_f*V0)           (44, 81a)
-model.S0       = -6.531e3;   % active stress           S0 = S0*L/(mu_f*V0), <0 pushers (44, 81b)
-model.Pc       = 3.265e3;    % contact pressure        Pc = Pc*L/(mu_f*V0)             (45c, 81b)
-model.gamma1   = 0.8163;     % rotational friction     gamma1/mu_f                     (45a, 81b)
-model.K0       = 0.4082;     % Frank constant at phi0  K/(mu_f*V0*L)                   (45b, 81c)
-model.eta2     = 1;          % particle shear viscosity eta2/mu_f                      (45a)
-                             %   (Wolgemuth used eta_b = 0 in his runs; kept 1 as in mainPC.m)
+%% Model parameters: reference case, Table 1 of the paper
+% Pusher B. subtilis following Wolgemuth (2008): cell radius b = 0.7 um,
+% cell length = force-dipole length l = 4 um, V0 = 5 um/s,
+% mu_f = 1e-3 Pa s, D_m = 1e-11 m^2/s, phi_bar = 0.15, L = 400 um
+% (=> time unit L/V0 = 80 s). Closures: kappa1 = kappa1hat*phi,
+% gamma1 = gamma1hat*phi, K = Khat*phi^2, everything else constant.
+model.phi0      = 0.15;       % base volume fraction phi_bar
+model.kappa1hat = 6.531e5;    % drag          kappa1 = kappa1hat*phi,  kappa1hat = 2L^2/b^2
+model.F0        = 6.531e5;    % propulsion    F  = 2L^2/b^2
+model.S0        = -6.531e3;   % active stress S  = -2 l L/b^2   (<0: pushers)
+model.Pc        = 3.265e3;    % contact pressure Pc = 2 D_m L/(b^2 V0)
+model.gamma1hat = 5.442;      % rot. friction gamma1 = gamma1hat*phi, gamma1hat = l^2/(6b^2)
+model.Khat      = 18.14;      % Frank const.  K = Khat*phi^2, fixed by K/gamma1 = 1e-9 m^2/s
+                              %   at phi_bar: Khat = (1e-9/(V0 L))*gamma1hat/phi_bar  (Er ~ 2.4)
+model.Lambda    = 1;          % flow alignment, slender particles (Lambda = 1)
+model.lambda    = 0;          % aspect ratio b/a -> 0 (slender limit)
+model.eta2      = 0;          % particle viscosities eta_k = 0
+% Zero in the reference case (Table 1) -- listed for completeness, the
+% solvers do not contain these terms:
+model.eta1 = 0; model.eta3 = 0; model.eta4 = 0; model.eta5 = 0;
+model.nu1  = 0; model.nu2  = 0; model.beta = 0; model.kappa2 = 0;
 
-parameter.model      = model;      % keep the model-unit values for plotting/bookkeeping
+parameter.model      = model;      % keep the model values for plotting/bookkeeping
 parameter.timeUnit_s = 80;         % L/V0 in seconds, only used for video labels ([] = model units)
-parameter            = modelToGridUnits(model, parameter);
+% Hand the model parameters to the solvers as they are -- the closures
+% (kappa1hat*phi, gamma1hat*phi, Khat*phi^2) are evaluated inside the
+% solvers on the local phi field.
+f = fieldnames(model);
+for i = 1:numel(f), parameter.(f{i}) = model.(f{i}); end
+% NOTE: the solvers do not yet contain flow alignment (Lambda) or the
+% elastic back-reaction on the particle momentum -- the parameters above
+% are the Table 1 values, the equations still need those terms.
+if parameter.Lambda ~= 0
+    warning('mainModel:Lambda', 'Lambda = %g is set but not yet implemented in the solvers.', parameter.Lambda);
+end
 
-parameter.PrefPt     = 100;   % pressure gauge mean (grid units)
+parameter.PrefPt     = 100;   % pressure gauge mean (units mu_f*V0/L)
 parameter.boolactive = 1;
 
 %% GMRES settings (see PredictorCorrector/mainPC.m for the reasoning behind each value)
@@ -44,23 +60,26 @@ parameter.gmresRestartScalar   = 30;    % Krylov size for phi/theta solvers
 %% Run settings (model time units L/V0)
 phi0             = model.phi0;
 t0               = 0;
-dt_model         = 5e-5;     % = 1e-4 in mainPC.m's units (A/V0 = L/(2V0))
-T_model          = 0.5;      % = T=1 in mainPC.m's units (40 s)
-Nx               = 30;
-Ny               = 30;
+dt_model         = 5e-5;     % time step in L/V0
+T_model          = 1;        % = 80 s
+Nx               = 50;
+Ny               = 50;
 Theta0_amplitude = 1e-3;
 Theta0_cutoff    = 10;
 
-dt = dt_model * parameter.Lgrid;   % grid time units
-T  = T_model  * parameter.Lgrid;
+dt = dt_model;
+T  = T_model;
 
 parameter.Nx = Nx;
 parameter.Ny = Ny;
 
 %% Grid and spectral operators
-[parameter.x, ~] = fourierGrid(1, Nx);
-[parameter.y, ~] = fourierGrid(1, Ny);
-D = fourierDiffOps(Nx, Ny);
+parameter.Lbox = 1;                                       % unit box of the paper
+[parameter.x, ~] = fourierGrid(parameter.Lbox/2, Nx);     % (-1/2, 1/2] ...
+[parameter.y, ~] = fourierGrid(parameter.Lbox/2, Ny);
+parameter.x = parameter.x + parameter.Lbox/2;             % ... shifted to (0, 1]
+parameter.y = parameter.y + parameter.Lbox/2;
+D = fourierDiffOps(Nx, Ny, parameter.Lbox);
 CoarseMesh = [];   % only kept for plotting_tool/createPresentationVideo call compatibility
 
 %% Initial conditions: uniform phi on the coarse grid, small random theta
@@ -143,16 +162,15 @@ while t < T
 
     phiext_now = D.liftP(phi_n);
     fprintf('t=%.5f L/V0  phi_mean=%.4f  phi_min=%.4f  phi_max=%.4f  [step wall time: %.3f s]\n', ...
-        t/parameter.Lgrid, mean(phiext_now), min(phiext_now), max(phiext_now), toc(stepWallTic));
+        t, mean(phiext_now), min(phiext_now), max(phiext_now), toc(stepWallTic));
     if min(phiext_now) < 0
         fprintf('phi_min=%.4e < 0, stopping simulation.\n', min(phiext_now));
         break;
     end
 end
 
-tt_model = tt / parameter.Lgrid;   % stored times in model units L/V0
-% Note: kk holds velocities in units of V0 (same in both unit systems) and
-% pressure in grid units -- multiply P by parameter.Lgrid for mu_f*V0/L.
+tt_model = tt;   % kept for compatibility: tt is already in units of L/V0
+% kk: velocities in units of V0, pressure in units of mu_f*V0/L (paper units).
 
 %% Timing report
 totalTime = toc(runTic);

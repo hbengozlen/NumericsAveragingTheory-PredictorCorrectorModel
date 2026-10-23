@@ -6,8 +6,8 @@ y=parameter.y;
 
 Ninterx=200;
 Nintery=200;
-[xinter,~]=fourierGrid(1,Ninterx);
-[yinter,~]=fourierGrid(1,Nintery);
+[xinter,~]=fourierGrid(0.5,Ninterx); xinter=xinter+0.5;   % unit box (0,1], same
+[yinter,~]=fourierGrid(0.5,Nintery); yinter=yinter+0.5;   % convention as parameter.x/y
 [XX,YY]=meshgrid(xinter,yinter);
 [X,Y]=meshgrid(x,y);
 
@@ -121,8 +121,8 @@ elseif ND==2
            V(1:step:end,1:step:end),'k')
     
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title("U_{fluid}")
     
     nexttile
@@ -135,8 +135,8 @@ elseif ND==2
            V(1:step:end,1:step:end),'k')
     
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title("U_{particle}")
     
     nexttile
@@ -151,8 +151,8 @@ elseif ND==2
     colormap jet
     colorbar 
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title("\phi")
     
     nexttile
@@ -165,8 +165,8 @@ elseif ND==2
            V(1:step:end,1:step:end),'k')
     
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title("\theta")
     
 
@@ -185,8 +185,8 @@ elseif ND==2
            V(1:step:end,1:step:end),'k')
     
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title("||U_{fluid}||")
 end
 % %1d plot

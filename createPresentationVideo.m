@@ -13,8 +13,8 @@ Ninterx=200;
 Nintery=200;
 Nx=parameter.Nx;
 Ny=parameter.Ny;
-[xx,~]=fourierGrid(1,Ninterx);
-[yy,~]=fourierGrid(1,Nintery);
+[xx,~]=fourierGrid(0.5,Ninterx); xx=xx+0.5;   % unit box (0,1]
+[yy,~]=fourierGrid(0.5,Nintery); yy=yy+0.5;
 [XX,YY]=meshgrid(xx,yy);
 
 idxPhi = 1:(Nx-2)*(Ny-2);
@@ -32,8 +32,8 @@ speedAll = sqrt(kk(idxUf1,:).^2 + kk(idxUf2,:).^2);
 speedMin = 0;
 speedMax = max(speedAll,[],'all');
 
-videoName = sprintf('PresentationVideo_%dx%d_S0_%g_K0_%g.mp4', Nx, Ny, ...
-    parameter.model.S0, parameter.model.K0);
+videoName = sprintf('PresentationVideo_%dx%d_S_%g_Khat_%g.mp4', Nx, Ny, ...
+    parameter.model.S0, parameter.model.Khat);
 v = VideoWriter(videoName,'MPEG-4');
 v.FrameRate = 10;
 v.Quality = 100;
@@ -68,8 +68,8 @@ for i = 1:FrameStep:length(tt)
     cb = colorbar;
     cb.FontSize = fontSizeAxes;
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title('Volume Fraction \phi','FontSize',fontSizeTitle)
     set(gca,'FontSize',fontSizeAxes)
 
@@ -88,8 +88,8 @@ for i = 1:FrameStep:length(tt)
            U(1:step:end,1:step:end), ...
            V(1:step:end,1:step:end),'k','LineWidth',1.2,'AutoScaleFactor',1.5)
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title('Fluid Velocity U_{fluid}','FontSize',fontSizeTitle)
     set(gca,'FontSize',fontSizeAxes)
 
@@ -103,13 +103,12 @@ for i = 1:FrameStep:length(tt)
            U(1:step:end,1:step:end), ...
            V(1:step:end,1:step:end),'k','LineWidth',1.2)
     axis image
-    xlim([-1 1])
-    ylim([-1 1])
+    xlim([0 1])
+    ylim([0 1])
     title('Orientation Field \theta','FontSize',fontSizeTitle)
     set(gca,'FontSize',fontSizeAxes)
 
-    % t is in grid time units; model time unit is L/V0 = Lgrid grid units
-    tModel = t/parameter.Lgrid;
+    tModel = t;   % t is in units of L/V0
     if isfield(parameter,'timeUnit_s') && ~isempty(parameter.timeUnit_s)
         sgtitle(sprintf('Time = %.2f s', tModel*parameter.timeUnit_s),'FontSize',fontSizeSup,'FontWeight','bold')
     else

@@ -75,15 +75,18 @@ Fcombo_y = fft2(reshape((1-phiext).*dUf2 + phiext.*dUp2, Ny, Nx));
 tmp5c = D.truncateFromFourier(KXgrid.*Fcombo_x + KYgrid.*Fcombo_y);
 out5 =rowScale * (tmp5c(1:Np) - tmp5c(NP));
 
-% Velocity gauge pin: mean(Uf1)=0, mean(Uf2)=0 instead of a physical point
-% pin. fft2(x)(1,1)=sum(x), so this is EXACTLY the DC-mode Fourier
-% coefficient of Uf1/Uf2 -- a per-mode constraint the preconditioner can
-% represent exactly (a physical point-pin spreads across every Fourier
-% mode when transformed; this doesn't). RefPtIDXfine is just the arbitrary
-% slot carrying this equation -- any index works, since mean() isn't tied
-% to a physical location.
-out1(RefPtIDXfine) = mean(dUf1);
-out2(RefPtIDXfine) = mean(dUf2);
+% Velocity gauge pin: zero mean mixture volume flux,
+%   mean((1-phi)*Uf + phi*Up) = 0   in x and y,
+% i.e. no net flow through the periodic box (the frame of the notes,
+% Section 3.1). The momentum equations fix the velocities only up to a
+% uniform drift of both phases, so this row replaces the (redundant)
+% fluid-momentum row at RefPtIDXfine -- any index works, since mean()
+% isn't tied to a physical location. Changing the gauge only changes the
+% frame (a uniform shift of Uf and Up), not the physics. The
+% preconditioner represents this constraint with phi frozen to phibar
+% (buildVelocityPreconditioner.m, decoupling (1)), exact for uniform phi.
+out1(RefPtIDXfine) = mean((1-phiext).*dUf1 + phiext.*dUp1);
+out2(RefPtIDXfine) = mean((1-phiext).*dUf2 + phiext.*dUp2);
 
 out = [out1; out2; out3; out4; out5];
 
